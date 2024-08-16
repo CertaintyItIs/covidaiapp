@@ -1,0 +1,70 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.impute import KNNImputer
+from sklearn.metrics import accuracy_score, classification_report
+
+# Assuming the dataset is in a CSV file named 'covid_data.csv'
+df = pd.read_csv('ML_ALgos/Case_Information.csv')
+
+# Remove unnecessary columns
+df = df.drop(['case_id', 'date_announced_as_removed', 'province', 'muni_city', 'region'], axis=1)
+
+# Convert status and health_status columns to categorical variables
+df['status'] = df['status'].astype('category')
+df['health_status'] = df['health_status'].astype('category')
+
+# Convert date_announced and date_recovered columns to datetime format
+df['date_announced'] = pd.to_datetime(df['date_announced'])
+df['date_recovered'] = pd.to_datetime(df['date_recovered'], errors='coerce')
+
+# Create a new column 'recovered' to indicate whether the patient has recovered or not
+df['recovered'] = np.where(df['health_status'] == 'Recovered', 1, 0)
+
+# Handle missing values in the 'age' column using KNN imputation
+imputer = KNNImputer(n_neighbors=5)
+df[['age']] = imputer.fit_transform(df[['age']])
+
+# Split the dataset into training and testing sets
+X = df[['age']]
+y = df['recovered']
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.6, random_state=42)# this test size has a 77% accuracy 
+
+# KNeighborsClassifier model
+knn = KNeighborsClassifier(n_neighbors=5)
+knn.fit(X_train, y_train)
+
+# Make predictions on the test set
+y_pred = knn.predict(X_test)
+
+# Calculate the count of recovered and deceased patients for each age
+recovered_counts = df[df['recovered'] == 1]['age'].value_counts().sort_index()
+deceased_counts = df[df['recovered'] == 0]['age'].value_counts().sort_index()
+
+# figure and axis object
+fig, ax = plt.subplots(figsize=(10, 6))
+
+# Plot the count of recovered patients for each age
+ax.plot(recovered_counts.index, recovered_counts.values, label='Recovered', color='g')
+
+# Plot the count of deceased patients for each age
+ax.plot(deceased_counts.index, deceased_counts.values, label='Died', color='r')
+
+#title and labels
+ax.set_title('Age Distribution of Recovered and Died Patients')
+ax.set_xlabel('Age')
+ax.set_ylabel('Patient Count')
+
+# legend
+ax.legend()
+#the plot
+plt.show()
+
+# Calculate the accuracy score
+accuracy = accuracy_score(y_test, y_pred)
+print("Accuracy:", accuracy)
+
+# Print the classification report
+print(classification_report(y_test, y_pred))
