@@ -1,0 +1,70 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.impute import KNNImputer
+from sklearn.metrics import accuracy_score, classification_report
+from sklearn.preprocessing import LabelEncoder
+
+# Assuming the dataset is in a CSV file named 'covid_data.csv'
+df = pd.read_csv('ML_ALgos/Case_Information.csv')
+
+# Remove unnecessary columns
+df = df.drop(['case_id', 'date_announced_as_removed', 'province', 'muni_city', 'region'], axis=1)
+
+# Convert status and health_status columns to categorical variables
+df['status'] = df['status'].astype('category')
+df['health_status'] = df['health_status'].astype('category')
+
+# Convert date_announced and date_recovered columns to datetime format
+df['date_announced'] = pd.to_datetime(df['date_announced'])
+df['date_recovered'] = pd.to_datetime(df['date_recovered'], errors='coerce')
+
+# Handle missing values in the 'age' column using KNN imputation
+imputer = KNNImputer(n_neighbors=5)
+df[['age']] = imputer.fit_transform(df[['age']])
+
+# Create a new column 'health_status_code' to encode health status
+le = LabelEncoder()
+df['health_status_code'] = le.fit_transform(df['health_status'])
+
+# Create a new column 'has_health_status' to indicate if any patient at a certain age has a specific health status
+df['has_health_status'] = df.groupby('age')['health_status_code'].transform(lambda x: ','.join(x.astype(str)))
+
+# Split the dataset into training and testing sets
+X = df[['age']]
+y = df['has_health_status']
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# KNeighborsClassifier model
+knn = KNeighborsClassifier(n_neighbors=5)
+knn.fit(X_train, y_train)
+
+# Make predictions on the test set
+y_pred = knn.predict(X_test)
+
+# Create a pivot table to count the average age for each health status
+health_status_ages = df.groupby('health_status')['age'].mean()
+
+# figure and axis object
+fig, ax = plt.subplots(figsize=(10, 6))
+
+# Plot the average age for each health status
+ax.barh(health_status_ages.index, health_status_ages.values, color=plt.cm.tab20(range(len(health_status_ages))))
+
+#title and labels
+ax.set_title('Average Age for Each Health Status')
+ax.set_xlabel('Patient Age')
+ax.set_ylabel('Health Status')
+
+# Compute the classification report
+report = classification_report(y_test, y_pred)
+print(report if type(report) is str else report.format(decimals=3))
+with open('report.txt', 'w') as f:
+  print(report, file=f)
+#accuracy score
+accuracy = accuracy_score(y_test, y_pred)
+print("wAccuracy:", accuracy)
+
+# Show plot
+plt.show()
