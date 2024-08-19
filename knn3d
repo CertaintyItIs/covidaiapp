@@ -1,0 +1,93 @@
+import pandas as pd
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.impute import KNNImputer
+from sklearn.preprocessing import LabelEncoder
+from mpl_toolkits.mplot3d import Axes3D
+import matplotlib.pyplot as plt
+
+# Load dataset
+df = pd.read_csv('ML_ALgos/Case_Information.csv')
+
+# Ensure date columns are in datetime format
+df['date_announced'] = pd.to_datetime(df['date_announced'])
+df['date_recovered'] = pd.to_datetime(df['date_recovered'], errors='coerce')
+df['date_of_death'] = pd.to_datetime(df['date_of_death'], errors='coerce')
+
+# Calculate days to recovery or death
+df['days_difference'] = (df['date_recovered'] - df['date_announced']).dt.days
+df['days_to_death'] = (df['date_of_death'] - df['date_announced']).dt.days
+
+# Combine recovery and death into a single target variable
+df['days'] = df['days_difference'].fillna(-df['days_to_death'])
+
+# Impute missing 'days' values with the mean of available 'days'
+df['days'].fillna(df['days'].mean(), inplace=True)
+
+# Encode health status
+le = LabelEncoder()
+df['health_status_encoded'] = le.fit_transform(df['health_status'])
+
+# Select features and target
+X = df[['health_status_encoded', 'age']]
+y = df['days']
+
+# Impute missing values in X (e.g., age)
+imputer = KNNImputer(n_neighbors=5)
+X_imputed = imputer.fit_transform(X)
+
+# Train KNN model
+knn = KNeighborsRegressor(n_neighbors=5)
+knn.fit(X_imputed, y)
+
+# Predict days difference
+df['predicted_days'] = knn.predict(X_imputed)
+
+# Create a new column for the actual days (for visualization)
+df['actual_days'] = df['days']
+
+# Plot Actual vs. Predicted Days
+plt.figure(figsize=(12, 6))
+
+# Scatter plot for actual vs predicted days
+plt.scatter(df['actual_days'], df['predicted_days'], alpha=0.5, c='blue', label='Predicted vs Actual Days')
+
+# Plot a 45-degree line for reference (ideal prediction)
+plt.plot([df['actual_days'].min(), df['actual_days'].max()],
+         [df['actual_days'].min(), df['actual_days'].max()],
+         color='red', linestyle='--', label='Ideal Prediction')
+
+# Titles and labels
+plt.title('Actual vs Predicted Days to Recovery/Death')
+plt.xlabel('Actual Days')
+plt.ylabel('Predicted Days')
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# 3D Surface Plot for visualization
+health_status_range = np.linspace(X_imputed[:, 0].min(), X_imputed[:, 0].max(), 100)
+age_range = np.linspace(X_imputed[:, 1].min(), X_imputed[:, 1].max(), 100)
+health_status_grid, age_grid = np.meshgrid(health_status_range, age_range)
+
+# Predict days difference for the meshgrid
+Z = knn.predict(np.c_[health_status_grid.ravel(), age_grid.ravel()])
+Z = Z.reshape(health_status_grid.shape)
+
+# Clip values to the desired ranges
+Z = np.clip(Z, -20, 20)
+
+# Plotting the 3D surface plot
+fig = plt.figure(figsize=(12, 8))
+ax = fig.add_subplot(111, projection='3d')
+
+# Plot surface
+ax.plot_surface(health_status_grid, age_grid, Z, cmap='coolwarm', edgecolor='k')
+
+# Labels and title
+ax.set_title('KNN Prediction: Days to Recovery/Death by Health Status and Age')
+ax.set_xlabel('Health Status (Encoded)')
+ax.set_ylabel('Age')
+ax.set_zlabel('Predicted Days Difference')
+
+plt.show()
