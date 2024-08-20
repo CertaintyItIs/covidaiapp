@@ -6,7 +6,7 @@ import seaborn as sns
 
 @st.cache_data
 def load_data():
-    file_path = 'case_information.csv'  # Replace with your CSV file name
+    file_path = 'case_information.csv'  
     df = pd.read_csv(file_path)
     return df
 
